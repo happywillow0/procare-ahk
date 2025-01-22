@@ -24,7 +24,9 @@ MyGui.Add("Text",, "Shortcut Keys:")
 MyGui.SetFont("Norm",)
 MyGui.Add("Text", "XP+0 Y+2", "Alt+Q: Quick Sig`nAlt+M: Math Sig`nAlt+~: Rx Entry Sig`nAlt+H: Admin Times")
 GUIStatus := MyGui.Add("Text", "XP+0 Y+0 w100", "Status: Ready")
-RelatedDx := MyGui.Add("CheckBox", "vDXRelated Check3 Checked", "Related Dx")
+;RelatedDx := MyGui.Add("CheckBox", "vDXRelated Check3 Checked", "Related Dx")
+RelatedDx := MyGui.Add("CheckBox", "vDXRelated", "Shorten Dx")
+RelatedDx.OnEvent("Click", DX_MsgBox)
 OverrideRX := MyGui.Add("CheckBox", "vOverride Check3", "Note Dosage")
 MyBtnReload := MyGui.Add("Button","w75", "Reload")
 MyBtnReload.OnEvent("Click", Reload_Click)
@@ -407,20 +409,22 @@ SigString := StrReplace(SigString, "QID (Q6H)", "QID")
 SigString := StrReplace(SigString, "daily", "QD")
 SigString := StrReplace(SigString, "max qd", "MAX DAILY")
 
-
-
-
 ;Clean Up Directions
 SigString := RegExReplace(SigString, "i)apply to (.*) topically", "APT $1")
 SigString := RegExReplace(SigString, "i)(?:lung sounds.*?after(?: tx)?)\.?|(?:post.*?wheeze(?:.*?minutes)?)", "") ; Clean up Neb Orders
 SigString := RegExReplace(SigString, "i)INDICATE.*?BELOW.", "") ; Clean up Lidocaine Orders
 SigString := RegExReplace(SigString, "i)as part of a \((\d+?(?:MG|MCG))\) dose", "(AS PART OF A $1 DOSE)")
 
+/*
 if RelatedDx.value=-1
 SigString := RegExReplace(SigString, "i) related.*?\([^ ]*?\)", "") ; Clean up related dx codes
 if RelatedDx.value=0
 SigString := RegExReplace(SigString, "i) related.*\([^ ]*?\)", "") ; Clean up related dx codes
 RelatedDx.value := 1
+*/
+if RelatedDx.value
+SigString := RegExReplace(SigString, "i)related[^(]*(\([^ ]+?\))(?:;[^(]*(\([^ ]*?\)))?(?:;[^(]*(\([^ ]*?\)))?(?:;[^(]*(\([^ ]*?\)))?", "DX:$1$2$3$4") ; Clean up related dx codes
+;SigString := RegExReplace(SigString, "i)related\D*(\(.+?\..*?\))(?:;\D*(\(.+?\..*?\)))?(?:;\D*(\(.+?\..*?\)))?(?:;\D*(\(.+?\..*?\)))?", "DX:$1$2$3$4") ; Clean up related dx codes
 
 If InStr(SigString, "Per Sliding Scale, SUBQ,") {
 SigString := StrReplace(SigString, "if blood sugar is", "")
@@ -542,6 +546,10 @@ Sig_History(drug, sigtext) {
 FileAppend FormatTime(, "ddMMMyyyy hh:mm:ss tt") ": (" drug ") " sigtext "`n", A_MyDocuments "\ERX QuickSig History.txt"
 }
 
+DX_MsgBox(*) {
+if RelatedDx.value
+MsgBox "This shortens down related diagnosis codes in the sig.`nPlease double check to make sure nothing extra gets removed.", "Shorten Related Diagnosis", 64
+}
 
 ;Debug: Press Ctrl+` when Quick Sig window is open 
 #HotIf WinExist("Quick Sig ahk_class AutoHotkeyGUI")
@@ -553,52 +561,3 @@ SigString := StrUpper(Interpert_Sig(TestSigObj.Value))
 A_Clipboard := SigString
 MsgBox "Your Quick Sig is copied on the clipboard.`n" SigString, "Manual Quick Sig"
 }
-
-; TEMP OLD CODE
-/*
-	If RegExMatch(DrugString, "i)([\d.,]*)(MCG|MG|GM|UNIT)?\/([\d.]*)(ML)?", &LiqStrength) {
-		RegExMatch(SigString , "i)([\d.]+) ?(MG|MCG|ML|GRAM|GM|CC)", &SigDose)
-		try {
-			DrugML := (LiqStrength[3] = "") ? 1 : LiqStrength[3]
-			DrugStrength := StrReplace(LiqStrength[1], ",", "")
-			if SigDose[2] = "ML" or SigDose[2] = "CC"  {
-				SigStrength := SigDose[1]/DrugML*DrugStrength
-				SigStrength := RTrim(RTrim(Round(SigStrength, 2), "0"), ".") LiqStrength[2]
-				SigString := StrReplace(SigString, "()", "(" SigStrength ")")
-			}
-			if (SigDose[2] = "MG" or SigDose[2] = "GM" or SigDose[2] = "GRAM" or SigDose[2] = "MCG") {
-				SigML := SigDose[1]*DrugML/DrugStrength
-				SigML := RTrim(RTrim(Round(SigML, 2), "0"), ".") LiqStrength[4]
-				SigString := RegExReplace(SigString, "i)\([\d.]+" SigDose[2] "\)", SigML " $0")
-			}
-		}
-	} 
-	if RegExMatch(SigString, "i)(\d+?(?:\.\d+?)?)(?:H|Q)?(T|C)(?: \(\))?", &SigDose) {
-		RegExMatch(DrugString , "i)([\d.]*)-?([\d.]+)* ?(mg|mcg|gram|meq|gm)", &DrugStrength)
-		try {
-			SigString := Tube_Sig(SigString, SigDose[2])
-			multiplier := InStr(SigString, "1HT") ? 0.5 : (InStr(SigString, "1QT") ? 0.25 : SigDose[1])
-    			SigStrength := formatStrength(DrugStrength[1]*multiplier)
-			if DrugStrength[2]
-			SigStrength .= "-" formatStrength(DrugStrength[2]*multiplier)
-			SigStrength .= DrugStrength[3]
-			SigString := StrReplace(SigString, "()", "(" SigStrength ")")
-		}
-		if form != ""
-		SigString := RegExReplace(SigString, "i)([0-9]+)(?:T|C) ", "$1" form " ")
-	} else if RegExMatch(DrugString , "i)([0-9.]+) ?(mg|mcg|gram|meq|gm)", &DrugStrength) and RegExMatch(SigString , "i)([0-9.]+) *(?:mg|mcg|gram|meq)", &SigDose) {
-		calcDose := formatStrength(SigDose[1]/DrugStrength[1])
-		doseqty := StrReplace(calcDose , "0.5", "1H")
-		doseqty := StrReplace(doseqty , "0.25", "1Q")
-		doseqty := StrReplace(doseqty , "0.75", "3Q")
-		if form = ""
-			doseqty := "" 
-		if form = "T" and calcDose < 0.25
-			MsgBox "Warning: The calculated tablet dose of " calcDose " is < 1QT. Please check drug strength", "Drug Strength Error", 16
-		if form = "C" and calcDose < 1
-			MsgBox "Warning: The calculated capsule dose of " calcDose " is < 1C. Please check drug strength", "Drug Strength Error", 16
-		SigString := Tube_Sig(SigString, form)
-		SigString := Trim(doseqty form " "  SigString)
-		SigString := RegExReplace(SigString, "i)(1(?:T|C)) \(.+?\)", "$1")
-	}
-	*/
