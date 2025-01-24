@@ -25,7 +25,7 @@ MyGui.SetFont("Norm",)
 MyGui.Add("Text", "XP+0 Y+2", "Alt+Q: Quick Sig`nAlt+M: Math Sig`nAlt+~: Rx Entry Sig`nAlt+H: Admin Times")
 GUIStatus := MyGui.Add("Text", "XP+0 Y+0 w100", "Status: Ready")
 ;RelatedDx := MyGui.Add("CheckBox", "vDXRelated Check3 Checked", "Related Dx")
-RelatedDx := MyGui.Add("CheckBox", "vDXRelated", "Shorten Dx")
+RelatedDx := MyGui.Add("CheckBox", "vDXRelated Check3", "Shorten Dx")
 RelatedDx.OnEvent("Click", DX_MsgBox)
 OverrideRX := MyGui.Add("CheckBox", "vOverride Check3", "Note Dosage")
 MyBtnReload := MyGui.Add("Button","w75", "Reload")
@@ -104,11 +104,12 @@ MyGui.Move(A_ScreenWidth-Width, 20)
 	if OverRideRX.value = 1 
 	fullsig := "**NOTE DOSAGE** " . fullsig
 	OverRideRX.value := false
-	A_Clipboard := Trim(fullsig)
+	fullsig := Trim(fullsig, " 	.")
+	A_Clipboard := fullsig 
 	SendInput "{Tab}^v"
 	SendInput "!d"
 	MouseMove MouseX, MouseY 
-	Sig_History(DrugString, Trim(fullsig))
+	Sig_History(DrugString, fullsig)
 	GUIStatus.Text := "Status: Ready"
 }
 
@@ -133,6 +134,7 @@ mathSig(DrugString, form, SigString) {
 			}
 		}
 	}
+
 	/*
 	formPos := RegExMatch(SigString, "i)(\d+?(?:\.\d+?)?)(?:H|Q)?(T|C)(?: \(\))?",)
 	dosePos := RegExMatch(SigString , "i)([0-9.]+) *(?:mg|mcg|gram|meq)",) 
@@ -158,7 +160,7 @@ mathSig(DrugString, form, SigString) {
 		 }
 		if form != ""
 		SigString := RegExReplace(SigString, "i)([0-9]+)(?:T|C) ", "$1" form " ")
-	} else if RegExMatch(DrugString , "i)([0-9.]+) ?(mg|mcg|gram|meq|gm)", &DrugStrength) and RegExMatch(SigString , "i)([0-9.]+) *(?:mg|mcg|gram|meq)", &SigDose) {
+	} else if RegExMatch(DrugString , "i)([0-9.]+) ?(mg|mcg|gram|meq|gm)", &DrugStrength) and RegExMatch(SigString , "i)([0-9.]+) *(?:mg|mcg|gram|meq|gm)", &SigDose) {
 		calcDose := formatStrength(SigDose[1]/DrugStrength[1])
 		doseqty := StrReplace(calcDose , "0.5", "1H")
 		doseqty := StrReplace(doseqty , "0.25", "1Q")
@@ -173,6 +175,10 @@ mathSig(DrugString, form, SigString) {
 		SigString := Trim(doseqty form " "  SigString)
 		SigString := RegExReplace(SigString, "i)(1(?:T|C)) \(.+?\)", "$1") 
 	} 
+	If InStr(SigString, "1PKT ()") {
+		RegExMatch(DrugString , "i)([0-9.]+) ?(mg|mcg|gram|meq|gm)", &DrugStrength)
+		SigString := StrReplace(SigString, "()", "(" DrugStrength[1] DrugStrength[2] ")")
+	}
 	return SigString
 }
 
@@ -257,11 +263,11 @@ SigString := StrReplace(SigString, "1/2 mg", "0.5MG")
 SigString := StrReplace(SigString, "1,0", "10")
 
 SigString := RegExReplace(SigString, "i)[1-5.]{1,3} ?(?:ml|milliliter|vial|unit)(?: inhale orally|, inhalation)(?: via nebulizer)?", "1UDN")
-SigString := RegExReplace(SigString, "i)\(?([\d.]+) *(mg|mcg|GRAMS?|meq|MILLIGRAM)(?: total)?\)?", "($1$2)")
+SigString := RegExReplace(SigString, "i)\(?([\d.]+) *(mg|mcg|GRAMS?|meq|MILLIGRAM|gm)(?: total)?\)?", "($1$2)")
 SigString := RegExReplace(SigString, "i)([2-9] (?:tablets?|tabs?|capsules?|caps?))(?:\(s\))?(?:[ =]+\((.+?)\))?", "$1 ($2)")
 SigString := RegExReplace(SigString, "i)(\d+) ?(?:mls?|cc|milliliter)(?: \((.+?)\))?", "$1ML ($2)")
 ;SigString := RegExReplace(SigString, "i)(\d+) ?(?:mls?|cc|milliliter)(?: \((.+?)\))?", "$1ML")
-SigString := StrReplace(SigString, "1 PACKET", "1 PACKET ()")
+SigString := StrReplace(SigString, "1 PACKET", "1PKT ()")
 SigString := StrReplace(SigString, "  ", " ")
 
 SigString := StrReplace(SigString, "0.5 tablet", "1HT")
@@ -415,16 +421,13 @@ SigString := RegExReplace(SigString, "i)(?:lung sounds.*?after(?: tx)?)\.?|(?:po
 SigString := RegExReplace(SigString, "i)INDICATE.*?BELOW.", "") ; Clean up Lidocaine Orders
 SigString := RegExReplace(SigString, "i)as part of a \((\d+?(?:MG|MCG))\) dose", "(AS PART OF A $1 DOSE)")
 
-/*
-if RelatedDx.value=-1
-SigString := RegExReplace(SigString, "i) related.*?\([^ ]*?\)", "") ; Clean up related dx codes
-if RelatedDx.value=0
-SigString := RegExReplace(SigString, "i) related.*\([^ ]*?\)", "") ; Clean up related dx codes
-RelatedDx.value := 1
-*/
-if RelatedDx.value
-SigString := RegExReplace(SigString, "i)related[^(]*(\([^ ]+?\))(?:;[^(]*(\([^ ]*?\)))?(?:;[^(]*(\([^ ]*?\)))?(?:;[^(]*(\([^ ]*?\)))?", "DX:$1$2$3$4") ; Clean up related dx codes
-;SigString := RegExReplace(SigString, "i)related\D*(\(.+?\..*?\))(?:;\D*(\(.+?\..*?\)))?(?:;\D*(\(.+?\..*?\)))?(?:;\D*(\(.+?\..*?\)))?", "DX:$1$2$3$4") ; Clean up related dx codes
+if RelatedDx.value = 1 {
+SigString := StrReplace(SigString, "related to ", "DX:;")
+SigString := RegExReplace(SigString, "i);.*?(\([a-z]\d\w\.?\w*[ads]?\))", "$1") ; Clean up related dx codes
+} else if RelatedDx.value = -1 {
+SigString := StrReplace(SigString, "related to ", ";")
+SigString := RegExReplace(SigString, "i);.*?(\([a-z]\d\w\.?\w*[ads]?\))", "") ; Clean up related dx codes
+}
 
 If InStr(SigString, "Per Sliding Scale, SUBQ,") {
 SigString := StrReplace(SigString, "if blood sugar is", "")
@@ -547,7 +550,7 @@ FileAppend FormatTime(, "ddMMMyyyy hh:mm:ss tt") ": (" drug ") " sigtext "`n", A
 }
 
 DX_MsgBox(*) {
-if RelatedDx.value
+if RelatedDx.value = 1
 MsgBox "This shortens down related diagnosis codes in the sig.`nPlease double check to make sure nothing extra gets removed.", "Shorten Related Diagnosis", 64
 }
 
